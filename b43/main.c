@@ -2121,21 +2121,32 @@ static void handle_irq_atim_end(struct b43_wldev *dev)
 
 static void handle_irq_pmq(struct b43_wldev *dev)
 {
+	bool ac = dev->phy.type == B43_PHYTYPE_AC;
 	unsigned int i;
 	u32 tmp;
-
-	//TODO: AP mode.
 
 	for (i = 0; i < B43_PMQ_DRAIN_MAX; i++) {
 		tmp = b43_read32(dev, B43_MMIO_PS_STATUS);
 		if (!(tmp & 0x00000008))
 			break;
+		/*
+		 * AC, as wl 7.14 drains it: the entry's address, then the pop,
+		 * one entry at a time. mac80211 follows the stations' power
+		 * save from their frames; the queue is drained so that the
+		 * microcode can keep filling it.
+		 */
+		if (ac) {
+			b43_read32(dev, B43_MMIO_PMQ_ADDR_LO);
+			b43_read32(dev, B43_MMIO_PMQ_ADDR_HI);
+			b43_write16(dev, B43_MMIO_PS_STATUS, 0x0002);
+		}
 	}
 	if (i == B43_PMQ_DRAIN_MAX)
 		b43warn(dev->wl, "Power management queue not drained: 0x%08x\n",
 			tmp);
 	/* 16bit write is odd, but correct. */
-	b43_write16(dev, B43_MMIO_PS_STATUS, 0x0002);
+	if (!ac)
+		b43_write16(dev, B43_MMIO_PS_STATUS, 0x0002);
 }
 
 static const struct b43_tpl_layout b43_tpl_layout_legacy = {
@@ -4153,11 +4164,14 @@ static void b43_adjust_opmode(struct b43_wldev *dev)
 				sta ? 0x0183 : 0x003a);
 	}
 
-	/* FIXME: We don't currently implement the PMQ mechanism,
-	 *        so always disable it. If we want to implement PMQ,
-	 *        we need to enable it here (clear DISCPMQ) in AP mode.
+	/*
+	 * The power management queue, on the AC as an AP: the AC stock driver
+	 * runs an AP with DISCPMQ clear (MACCONTROL 0x04160403, agcombo and
+	 * RT-AC66U B1), so the microcode holds back the frames to a station
+	 * in power save and reports them suppressed (b43_fill_txstatus_report()
+	 * hands them back to mac80211 as filtered). Elsewhere it is discarded.
 	 */
-	if (0  /* ctl & B43_MACCTL_AP */)
+	if ((ctl & B43_MACCTL_AP) && dev->phy.type == B43_PHYTYPE_AC)
 		b43_maskset32(dev, B43_MMIO_MACCTL, ~B43_MACCTL_DISCPMQ, 0);
 	else
 		b43_maskset32(dev, B43_MMIO_MACCTL, ~0, B43_MACCTL_DISCPMQ);
@@ -5598,8 +5612,10 @@ static void b43_ac_cac_match_gate(struct b43_wldev *dev, bool open)
 			      open ? dev->wl->mac_addr : NULL,
 			      open ? B43_AMT_F_SELF : 0);
 	if (open) {
+		/* An AP keeps its power management queue (b43_adjust_opmode()). */
 		if (ap)
-			b43_maskset32(dev, B43_MMIO_MACCTL, ~0, B43_MACCTL_AP);
+			b43_maskset32(dev, B43_MMIO_MACCTL, ~B43_MACCTL_DISCPMQ,
+				      B43_MACCTL_AP);
 		if (dev->phy.ops->cac_done)
 			dev->phy.ops->cac_done(dev);
 		return;

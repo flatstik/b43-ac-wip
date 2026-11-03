@@ -835,6 +835,15 @@ static int b43_generate_txhdr_ac(struct b43_wldev *dev, u8 *_txhdr,
 	if (c->vht && !(mac_lo & B43_TXH_AC_MAC_AMPDU))
 		mac_hi |= B43_TXH_AC_MAC_SVHT;
 
+	/*
+	 * What mac80211 sends to a station in power save on purpose, and a
+	 * filtered frame it sends again, go out whatever the power management
+	 * queue says (D11AC_TXC_IPMQ of d11.h).
+	 */
+	if (info->flags & (IEEE80211_TX_CTL_NO_PS_BUFFER |
+			   IEEE80211_TX_CTL_CLEAR_PS_FILT))
+		mac_lo |= B43_TXH_AC_MAC_IPMQ;
+
 	txhdr->mac_ctl_lo = cpu_to_le16(mac_lo);
 	txhdr->mac_ctl_hi = cpu_to_le16(mac_hi);
 	txhdr->chanspec = cpu_to_le16(ac->chanspec);
@@ -1774,6 +1783,12 @@ bool b43_fill_txstatus_report(struct b43_wldev *dev,
 		}
 	}
 	if (dev->fw.hdr_format == B43_FW_HDR_AC) {
+		/*
+		 * Held back for a station in power save: mac80211 buffers the
+		 * frame and sends it again when the station wakes.
+		 */
+		if (status->supp_reason == B43_TXST_SUPP_PMQ)
+			report->flags |= IEEE80211_TX_STAT_TX_FILTERED;
 		b43_fill_txstatus_rates_ac(report, status);
 		return frame_success;
 	}

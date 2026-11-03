@@ -242,6 +242,7 @@ struct b43_txhdr_ac {
 #define B43_TXH_AC_MAC_AMPDU		0x0040	/* Aggregatable */
 #define B43_TXH_AC_MAC_IACK		0x0080	/* Expect an immediate ACK */
 #define B43_TXH_AC_MAC_LFRM		0x0100	/* Long frame retry limit */
+#define B43_TXH_AC_MAC_IPMQ		0x0200	/* Ignore the PMQ */
 #define B43_TXH_AC_MAC_ASEQ		0x0800	/* ucode assigns the sequence number */
 #define B43_TXH_AC_MAC_STMSDU		0x4000	/* First MSDU */
 /* MAC TX control, high */

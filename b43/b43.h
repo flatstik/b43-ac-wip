@@ -47,6 +47,13 @@
 #define B43_MMIO_RAM_CONTROL		0x130
 #define B43_MMIO_RAM_DATA		0x134
 #define B43_MMIO_PS_STATUS		0x140
+/*
+ * AC: the power management queue entry under B43_MMIO_PS_STATUS bit 3, the
+ * station's address, low four bytes and high two (wl 7.14 reads both before
+ * it pops the entry, router-data/rt-ac66u-b1/pmq-5g36-80.zip).
+ */
+#define B43_MMIO_PMQ_ADDR_LO	0x144
+#define B43_MMIO_PMQ_ADDR_HI	0x148
 #define B43_MMIO_RADIO_HWENABLED_HI	0x158
 #define B43_MMIO_MAC_HW_CAP		0x15C	/* MAC capabilities (corerev >= 13) */
 #define B43_MMIO_SHM_CONTROL		0x160
