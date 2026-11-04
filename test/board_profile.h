@@ -78,6 +78,9 @@ struct board_profile {
 	 * e gainctx = ((triso+4)<<1)+2 nel body Phase 3 di noise-shaping. */
 	u8 rxgains_5gl_elnagain[3];
 	u8 rxgains_5gl_triso[3];
+	/* rxgains_5gh per core, the channels from 5500 MHz up. */
+	u8 rxgains_5gh_elnagain[3];
+	u8 rxgains_5gh_triso[3];
 	/* The 2.4 GHz fields, per core: pa2ga (a1, b0, b1) and rxgains 2g. Only
 	 * the archer profile carries them; the routers are zero there. */
 	u16 pa2ga[3][3];
@@ -159,6 +162,9 @@ static const struct board_profile PROFILE_D6220 = {
 	/* rxgains5gelnagaina{0,1,2}=3, rxgains5gtrisoa{0,1,2}=6 (NVRAM d6220). */
 	.rxgains_5gl_elnagain = { 3, 3, 3 },
 	.rxgains_5gl_triso    = { 6, 6, 6 },
+	/* rxgains5gh* (NVRAM d6220: unprogrammed). */
+	.rxgains_5gh_elnagain = { 7, 7, 7 },
+	.rxgains_5gh_triso    = { 15, 15, 15 },
 	/* No RETVAL in the d6220 capture (older tracer): the observed TXLPF
 	 * write lo=0x50db fixes cap=0xa8, hence F-E=0xdf. Absolute E is taken
 	 * as comparator-A 0x0ac7; only the difference feeds the cap. */
@@ -228,6 +234,9 @@ static const struct board_profile PROFILE_AGCOMBO = {
 	/* Same 5gl values as d6220 (NVRAM agcombo). */
 	.rxgains_5gl_elnagain = { 3, 3, 3 },
 	.rxgains_5gl_triso    = { 6, 6, 6 },
+	/* rxgains5gh* (NVRAM agcombo: unprogrammed). */
+	.rxgains_5gh_elnagain = { 7, 7, 7 },
+	.rxgains_5gh_triso    = { 15, 15, 15 },
 	/* Real E/F from the agcombo rescan RETVALs -> cap=0xae. */
 	.rccal_e = 0x0adc, .rccal_f = 0x0bc4,
 	.rccal_g = 0x01a8,  /* -> dacbuf_cap 0xd */
@@ -289,6 +298,9 @@ static const struct board_profile PROFILE_DSL = {
 	},
 	.rxgains_5gl_elnagain = { 3, 3, 3 },
 	.rxgains_5gl_triso    = { 6, 6, 6 },
+	/* rxgains5gh* (NVRAM dsl3580l: unprogrammed). */
+	.rxgains_5gh_elnagain = { 7, 7, 7 },
+	.rxgains_5gh_triso    = { 15, 15, 15 },
 	/* Real E/F from the DSL down-to-bss RETVALs -> cap=0xb6 (lo=0x6cdb). */
 	.rccal_e = 0x0b39, .rccal_f = 0x0c2b,
 	.rccal_g = 0x0186,  /* -> dacbuf_cap 0xc */
@@ -355,6 +367,9 @@ static const struct board_profile PROFILE_TG789 = {
 	},
 	.rxgains_5gl_elnagain = { 3, 3, 3 },
 	.rxgains_5gl_triso    = { 6, 6, 6 },
+	/* rxgains5gh* (NVRAM tg789vac v2: unprogrammed). */
+	.rxgains_5gh_elnagain = { 7, 7, 7 },
+	.rxgains_5gh_triso    = { 15, 15, 15 },
 	/* RETVAL di cold01-ch36-bw20: E #893, F #895, G post-apply #1037. */
 	.rccal_e = 0x0ac3, .rccal_f = 0x0ba5,
 	.rccal_g = 0x01c9,  /* -> dacbuf_cap 0xe */
@@ -418,6 +433,9 @@ static const struct board_profile PROFILE_ARCHER = {
 	},
 	.rxgains_5gl_elnagain = { 3, 3, 3 },
 	.rxgains_5gl_triso    = { 9, 9, 9 },
+	/* rxgains5gh* (none in the dump: taken as unprogrammed). */
+	.rxgains_5gh_elnagain = { 7, 7, 7 },
+	.rxgains_5gh_triso    = { 15, 15, 15 },
 	/* /tmp/srom/archer.vars: maxp2ga0..2 = 80, every 2.4 GHz offset 0. */
 	.maxp2ga = { 80, 80, 80 },
 	.pa2ga = {
@@ -478,6 +496,9 @@ static const struct board_profile PROFILE_MACBOOK = {
 	},
 	.rxgains_5gl_elnagain = { 3, 3, 7 },
 	.rxgains_5gl_triso    = { 7, 6, 15 },
+	/* rxgains5gh* (none in the dump: taken as unprogrammed). */
+	.rxgains_5gh_elnagain = { 7, 7, 7 },
+	.rxgains_5gh_triso    = { 15, 15, 15 },
 	/*
 	 * srom-raw.txt, as docs/retrace-todo.md ("2.4 GHz") decodes it: maxp2ga
 	 * 80, mcsbw202gpo = mcsbw402gpo = 0xaa555000, CCK offsets 0.
@@ -595,6 +616,9 @@ static const struct board_profile PROFILE_R7000_5G = {
 	},
 	.rxgains_5gl_elnagain = { 4, 4, 4 },
 	.rxgains_5gl_triso    = { 7, 6, 5 },
+	/* rxgains5gh* (NVRAM r7000 pci/2/1). */
+	.rxgains_5gh_elnagain = { 3, 3, 4 },
+	.rxgains_5gh_triso    = { 5, 4, 4 },
 	/* cold-5g20.zip, cold01-ch36-bw20: E, F and G post-apply. */
 	.rccal_e = 0x0b18, .rccal_f = 0x0c04,
 	.rccal_g = 0x01a8,
@@ -684,6 +708,10 @@ static inline void board_profile_to_sprom(const struct board_profile *p,
 	       sizeof(s->rxgains_5gl.elnagain));
 	memcpy(s->rxgains_5gl.triso, p->rxgains_5gl_triso,
 	       sizeof(s->rxgains_5gl.triso));
+	memcpy(s->rxgains_5gh.elnagain, p->rxgains_5gh_elnagain,
+	       sizeof(s->rxgains_5gh.elnagain));
+	memcpy(s->rxgains_5gh.triso, p->rxgains_5gh_triso,
+	       sizeof(s->rxgains_5gh.triso));
 	memcpy(s->rxgains_2g.elnagain, p->rxgains_2g_elnagain,
 	       sizeof(s->rxgains_2g.elnagain));
 	memcpy(s->rxgains_2g.triso, p->rxgains_2g_triso,

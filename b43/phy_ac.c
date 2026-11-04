@@ -4948,6 +4948,38 @@ static void b43_phy_ac_agc_clip(const struct b43_phy_ac_agc_band *b,
 }
 
 /*
+ * The board's RX gains for the channel being tuned: rxgains2g* on 2.4 GHz;
+ * on 5 GHz rxgains5g* below channel 100 (5500 MHz) and rxgains5gh* from
+ * there up. rxgains5gm* is taken on none of the channels measured: wl
+ * 7.14.164.18 on the R7000 (ch 36, 52, 100, 116, 132, 149), the RT-AC66U
+ * B1 (ch 36, 100, 149) and the R6400 v1 (ch 36, 52, 149), all
+ * subband5gver 4. This edge is not the 5250/5500 split of the CRS rings:
+ * ch 52 still takes rxgains5g*.
+ *
+ * A core whose rxgains5gh* reads all ones (elnagain 7, triso 15) keeps
+ * rxgains5g*: the SROM boards (D6220, TG789vac v2, agcombo) have 5gm and
+ * 5gh unprogrammed, and their wl (7.14.89, 7.14.43) writes the 5g values
+ * on every 5 GHz channel. Those runs cannot tell such a fallback from an
+ * older wl that never switches; the rule fits both.
+ * [capture-ref: router-data/r7000/mmio-rxgains5g-subbands.zip]
+ * [capture-ref: router-data/d6220/cold-sweep.zip!cold09-ch100-bw20.txt]
+ */
+static const struct ssb_sprom_rxgains *
+b43_phy_ac_rxgains(struct b43_wldev *dev, unsigned int core)
+{
+	const struct ssb_sprom *sprom = dev->dev->bus_sprom;
+	const struct ieee80211_channel *chan = dev->wl->hw->conf.chandef.chan;
+	const struct ssb_sprom_rxgains *h = &sprom->rxgains_5gh;
+
+	if (b43_current_band(dev->wl) == NL80211_BAND_2GHZ)
+		return &sprom->rxgains_2g;
+	if (chan && chan->center_freq >= 5500 &&
+	    !(h->elnagain[core] == 7 && h->triso[core] == 15))
+		return h;
+	return &sprom->rxgains_5gl;
+}
+
+/*
  * The core's five settings, in register order: the first is the one before
  * the 5 GHz move, which b43_phy_ac_post_noise_shaping_rx_regprog_core()
  * applies the way wl does.
@@ -4956,12 +4988,10 @@ static const struct b43_phy_ac_agc_band *
 b43_phy_ac_agc_settings(struct b43_wldev *dev, unsigned int core,
 			struct b43_phy_ac_gain g[5])
 {
-	const struct ssb_sprom *sprom = dev->dev->bus_sprom;
 	bool band_2g = b43_current_band(dev->wl) == NL80211_BAND_2GHZ;
 	const struct b43_phy_ac_agc_band *b =
 		band_2g ? &b43_phy_ac_agc_2g : &b43_phy_ac_agc_5g;
-	const struct ssb_sprom_rxgains *rx =
-		band_2g ? &sprom->rxgains_2g : &sprom->rxgains_5gl;
+	const struct ssb_sprom_rxgains *rx = b43_phy_ac_rxgains(dev, core);
 	int elna = 2 * (rx->elnagain[core] + 3);
 	int md = 2 * rx->triso[core] + b->md;
 	int lo = 2 * rx->triso[core] + b->lo;
@@ -5946,9 +5976,9 @@ static void b43_phy_ac_chanspec_tail(struct b43_wldev *dev)
  * The core loop is the caller's; the stock driver emits this for every
  * silicon core, 2x2 boards included.
  *
- * On 5 GHz it uses rxgains_5gl (U-NII-1); 5gm and 5gh need a per-sub-band
- * selection. On 2.4 GHz rxgains_2g: the archer-t5e has elnagain 4 there and
- * 3 in 5gl, and writes the header as 0x0e on 2.4 GHz and 0x0c on 5 GHz.
+ * The set is the channel's (b43_phy_ac_rxgains()). On 2.4 GHz rxgains_2g:
+ * the archer-t5e has elnagain 4 there and 3 in 5gl, and writes the header
+ * as 0x0e on 2.4 GHz and 0x0c on 5 GHz.
  * [capture-ref: router-data/d6220/cold-sweep.zip!cold01-ch36-bw20.txt;
  *   10578-10621, 10738-10781, 10898-10941]
  * [capture-ref: router-data/d6220/hot-sweep.zip!segmenti/01-up-ch36-bw20.txt;
@@ -5961,9 +5991,7 @@ static void b43_phy_ac_rxgain_init(struct b43_wldev *dev, unsigned int core)
 	static const u16 fill_03[10] = { 3, 3, 3, 3, 3, 3, 3, 3, 3, 3 };
 	static const u16 fill_02[10] = { 2, 2, 2, 2, 2, 2, 2, 2, 2, 2 };
 	bool band_2g = b43_current_band(dev->wl) == NL80211_BAND_2GHZ;
-	const struct ssb_sprom *sprom = dev->dev->bus_sprom;
-	const struct ssb_sprom_rxgains *rxgains =
-		band_2g ? &sprom->rxgains_2g : &sprom->rxgains_5gl;
+	const struct ssb_sprom_rxgains *rxgains = b43_phy_ac_rxgains(dev, core);
 	u16 ps = (u16)(core * 0x0200);
 	u16 ta = (u16)(0x0044 + core * 0x0020);
 	u16 tb = (u16)(0x0045 + core * 0x0020);
